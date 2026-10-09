@@ -5,57 +5,50 @@ import {
     LayoutDashboard, LogOut, Menu, X, CheckSquare, XCircle, CalendarDays, ClipboardList
 } from 'lucide-react';
 
-const initialAlunos = [
-    { id: 1, nome: "João Silva", cpf: "111.222.333-44", email: "joao@email.com", telefone: "(11) 9999-8888", endereco: "Rua A, 100", status: "Ativo" },
-    { id: 2, nome: "Maria Oliveira", cpf: "222.333.444-55", email: "maria@email.com", telefone: "(11) 7777-6666", endereco: "Av. Brasil, 500", status: "Ativo" },
-];
+// Firebase SDK imports
+import { initializeApp } from "firebase/app";
+import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 
-const initialProfessores = [
-    { id: 1, nome: "Carlos Mendes", cpf: "333.444.555-66", especialidade: "Programação Web", email: "carlos@escola.com", telefone: "(11) 91111-2222", status: "Ativo" },
-    { id: 2, nome: "Ana Costa", cpf: "444.555.666-77", especialidade: "Banco de Dados", email: "ana@escola.com", telefone: "(11) 92222-3333", status: "Ativo" }
-];
+// Your exact Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyD13NVXIPmHmAbfYLjz-kfJPlR16j_11mY",
+  authDomain: "escolainfo-a297b.firebaseapp.com",
+  projectId: "escolainfo-a297b",
+  storageBucket: "escolainfo-a297b.firebasestorage.app",
+  messagingSenderId: "407378865723",
+  appId: "1:407378865723:web:a0d6dc2b4b946f82a8b61e"
+};
 
-const initialCursos = [
-    { id: 1, nome: "Lógica de Programação", cargaHoraria: 40, valor: 250.00, prereqId: null, status: "Ativo" },
-    { id: 2, nome: "Desenvolvimento React", cargaHoraria: 60, valor: 450.00, prereqId: 1, status: "Ativo" },
-];
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-const initialProfessorCursos = [
-    { id: 1, professorId: 1, cursoId: 1, dataHabilitacao: "2025-01-15" },
-    { id: 2, professorId: 1, cursoId: 2, dataHabilitacao: "2025-02-01" },
-];
-
-const initialTurmas = [
-    { id: 1, cursoId: 1, professorId: 1, horario: "Seg/Qua 19:00", dataInicio: "2026-02-01", dataFim: "2026-04-01", capacidade: 20 },
-    { id: 2, cursoId: 2, professorId: 1, horario: "Ter/Qui 19:00", dataInicio: "2026-02-05", dataFim: "2026-05-01", capacidade: 15 }
-];
-
-const initialMatriculas = [
-    { id: 1, alunoId: 1, turmaId: 1, data: "2026-02-01", status: "Ativa" }
-];
-
-const initialPagamentos = [
-    { id: 1, matriculaId: 1, valor: 250.00, vencimento: "2026-03-05", status: "Pago", formaPagamento: "PIX", dataPagamento: "2026-03-02" }
-];
-
-const MarioLoading = ({ onComplete }) => {
+const MarioLoading = ({ onComplete, isDataReady }) => {
     const [progress, setProgress] = useState(0);
     const [isJumping, setIsJumping] = useState(false);
     const [showCoin, setShowCoin] = useState(false);
+    const [minigameDone, setMinigameDone] = useState(false);
 
     useEffect(() => {
         const timer = setInterval(() => {
             setProgress((prev) => {
                 if (prev >= 100) {
                     clearInterval(timer);
-                    setTimeout(onComplete, 2000); 
+                    setMinigameDone(true);
                     return 100;
                 }
                 return prev + 1.5; 
             });
         }, 60);
         return () => clearInterval(timer);
-    }, [onComplete]);
+    }, []);
+
+    // Only complete when both minigame finishes AND data is ready
+    useEffect(() => {
+        if (minigameDone && isDataReady) {
+            setTimeout(onComplete, 1000); 
+        }
+    }, [minigameDone, isDataReady, onComplete]);
 
     const handleJump = useCallback(() => {
         if (isJumping || progress >= 100) return;
@@ -80,10 +73,13 @@ const MarioLoading = ({ onComplete }) => {
     }, [handleJump]);
 
     return (
-        <div className="fixed inset-0 bg-sky-300 flex flex-col items-center justify-center overflow-hidden cursor-pointer select-none" onClick={handleJump}>
+        <div className="fixed inset-0 bg-sky-300 flex flex-col items-center justify-center overflow-hidden cursor-pointer select-none z-50" onClick={handleJump}>
             <div className="absolute top-10 text-white font-bold text-2xl tracking-widest drop-shadow-md text-center">
                 <p>CARREGANDO SISTEMA</p>
                 <p className="text-sm mt-2 font-normal opacity-80">Pressione ESPAÇO para acelerar!</p>
+                {!isDataReady && progress >= 100 && (
+                    <p className="text-sm mt-4 font-normal text-yellow-200 animate-pulse">Sincronizando com Banco de Dados...</p>
+                )}
             </div>
             <div className="relative w-full max-w-2xl h-64 border-b-8 border-green-600 bg-sky-300">
                 <div className="absolute top-8 left-10 w-16 h-8 bg-white rounded-full opacity-80"></div>
@@ -132,7 +128,7 @@ const Card = ({ title, value, icon: Icon, color }) => (
 );
 
 const ViewDashboard = ({ alunos, professores, cursos, turmas, matriculas, pagamentos }) => {
-    const totalRecebido = pagamentos.filter(p => p.status === 'Pago').reduce((acc, curr) => acc + parseFloat(curr.valor), 0);
+    const totalRecebido = pagamentos.filter(p => p.status === 'Pago').reduce((acc, curr) => acc + parseFloat(curr.valor || 0), 0);
     return (
         <div className="animate-in fade-in space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
@@ -154,12 +150,34 @@ const ViewDashboard = ({ alunos, professores, cursos, turmas, matriculas, pagame
 
 const ViewAlunos = ({ alunos, setAlunos, notify }) => {
     const [form, setForm] = useState({ nome: '', cpf: '', email: '', telefone: '', endereco: '', status: 'Ativo' });
-    const handleSubmit = (e) => {
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        setAlunos([...alunos, { id: Date.now(), ...form }]);
-        notify("Aluno cadastrado com sucesso!", "success");
-        setForm({ nome: '', cpf: '', email: '', telefone: '', endereco: '', status: 'Ativo' });
+        setIsLoading(true);
+        try {
+            const docRef = await addDoc(collection(db, "alunos"), form);
+            setAlunos([...alunos, { id: docRef.id, ...form }]);
+            notify("Aluno cadastrado com sucesso!", "success");
+            setForm({ nome: '', cpf: '', email: '', telefone: '', endereco: '', status: 'Ativo' });
+        } catch (error) {
+            console.error("Erro ao adicionar aluno: ", error);
+            notify("Erro ao cadastrar aluno.", "error");
+        }
+        setIsLoading(false);
     };
+
+    const handleDelete = async (id) => {
+        try {
+            await deleteDoc(doc(db, "alunos", id));
+            setAlunos(alunos.filter(a => a.id !== id));
+            notify("Aluno removido com sucesso!", "success");
+        } catch (error) {
+            console.error("Erro ao remover aluno: ", error);
+            notify("Erro ao remover aluno.", "error");
+        }
+    };
+
     return (
         <div className="animate-in fade-in flex flex-col lg:flex-row gap-6">
             <div className="flex-1 bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-fit">
@@ -167,20 +185,25 @@ const ViewAlunos = ({ alunos, setAlunos, notify }) => {
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <input type="text" placeholder="Nome" className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg" value={form.nome} onChange={e=>setForm({...form, nome: e.target.value})} required/>
                     <input type="text" placeholder="CPF" className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg" value={form.cpf} onChange={e=>setForm({...form, cpf: e.target.value})} required/>
-                    <button type="submit" className="w-full bg-blue-600 text-white p-2.5 rounded-lg font-medium hover:bg-blue-700">Salvar Aluno</button>
+                    <button type="submit" disabled={isLoading} className="w-full bg-blue-600 text-white p-2.5 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50">
+                        {isLoading ? 'Salvando...' : 'Salvar Aluno'}
+                    </button>
                 </form>
             </div>
             <div className="flex-[2] bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <h3 className="text-lg font-bold mb-4">Alunos</h3>
-                <table className="w-full text-left border-collapse min-w-[500px]">
-                    <thead><tr className="bg-gray-50"><th className="p-3">ID</th><th className="p-3">Nome</th><th className="p-3">CPF</th><th className="p-3">Ações</th></tr></thead>
-                    <tbody>
-                        {alunos.map(a => (
-                            <tr key={a.id} className="border-b border-gray-50"><td className="p-3">#{a.id}</td><td className="p-3">{a.nome}</td><td className="p-3">{a.cpf}</td>
-                            <td className="p-3"><button onClick={() => setAlunos(alunos.filter(x => x.id !== a.id))} className="text-red-500"><Trash2 size={16}/></button></td></tr>
-                        ))}
-                    </tbody>
-                </table>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse min-w-[500px]">
+                        <thead><tr className="bg-gray-50"><th className="p-3">Nome</th><th className="p-3">CPF</th><th className="p-3">Ações</th></tr></thead>
+                        <tbody>
+                            {alunos.length === 0 && <tr><td colSpan="3" className="p-4 text-center text-gray-500">Nenhum aluno cadastrado.</td></tr>}
+                            {alunos.map(a => (
+                                <tr key={a.id} className="border-b border-gray-50"><td className="p-3">{a.nome}</td><td className="p-3">{a.cpf}</td>
+                                <td className="p-3"><button onClick={() => handleDelete(a.id)} className="text-red-500 hover:text-red-700"><Trash2 size={18}/></button></td></tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );
@@ -188,12 +211,34 @@ const ViewAlunos = ({ alunos, setAlunos, notify }) => {
 
 const ViewProfessores = ({ professores, setProfessores, notify }) => {
     const [form, setForm] = useState({ nome: '', cpf: '', especialidade: '', email: '', telefone: '', status: 'Ativo' });
-    const handleSubmit = (e) => {
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        setProfessores([...professores, { id: Date.now(), ...form }]);
-        notify("Professor cadastrado com sucesso!", "success");
-        setForm({ nome: '', cpf: '', especialidade: '', email: '', telefone: '', status: 'Ativo' });
+        setIsLoading(true);
+        try {
+            const docRef = await addDoc(collection(db, "professores"), form);
+            setProfessores([...professores, { id: docRef.id, ...form }]);
+            notify("Professor cadastrado com sucesso!", "success");
+            setForm({ nome: '', cpf: '', especialidade: '', email: '', telefone: '', status: 'Ativo' });
+        } catch (error) {
+            console.error("Erro ao adicionar professor: ", error);
+            notify("Erro ao cadastrar professor.", "error");
+        }
+        setIsLoading(false);
     };
+
+    const handleDelete = async (id) => {
+        try {
+            await deleteDoc(doc(db, "professores", id));
+            setProfessores(professores.filter(p => p.id !== id));
+            notify("Professor removido com sucesso!", "success");
+        } catch (error) {
+            console.error("Erro ao remover professor: ", error);
+            notify("Erro ao remover professor.", "error");
+        }
+    };
+
     return (
         <div className="animate-in fade-in flex flex-col lg:flex-row gap-6">
             <div className="flex-1 bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-fit">
@@ -201,20 +246,25 @@ const ViewProfessores = ({ professores, setProfessores, notify }) => {
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <input type="text" placeholder="Nome" className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg" value={form.nome} onChange={e=>setForm({...form, nome: e.target.value})} required/>
                     <input type="text" placeholder="Especialidade" className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg" value={form.especialidade} onChange={e=>setForm({...form, especialidade: e.target.value})} required/>
-                    <button type="submit" className="w-full bg-purple-600 text-white p-2.5 rounded-lg font-medium hover:bg-purple-700">Salvar Professor</button>
+                    <button type="submit" disabled={isLoading} className="w-full bg-purple-600 text-white p-2.5 rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50">
+                        {isLoading ? 'Salvando...' : 'Salvar Professor'}
+                    </button>
                 </form>
             </div>
-            <div className="flex-[2] bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <div className="flex-[2] bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <h3 className="text-lg font-bold mb-4">Professores</h3>
-                <table className="w-full text-left border-collapse">
-                    <thead><tr className="bg-gray-50"><th className="p-3">Nome</th><th className="p-3">Especialidade</th><th className="p-3">Ações</th></tr></thead>
-                    <tbody>
-                        {professores.map(p => (
-                            <tr key={p.id} className="border-b border-gray-50"><td className="p-3">{p.nome}</td><td className="p-3">{p.especialidade}</td>
-                            <td className="p-3"><button onClick={() => setProfessores(professores.filter(x => x.id !== p.id))} className="text-red-500"><Trash2 size={16}/></button></td></tr>
-                        ))}
-                    </tbody>
-                </table>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse min-w-[500px]">
+                        <thead><tr className="bg-gray-50"><th className="p-3">Nome</th><th className="p-3">Especialidade</th><th className="p-3">Ações</th></tr></thead>
+                        <tbody>
+                            {professores.length === 0 && <tr><td colSpan="3" className="p-4 text-center text-gray-500">Nenhum professor cadastrado.</td></tr>}
+                            {professores.map(p => (
+                                <tr key={p.id} className="border-b border-gray-50"><td className="p-3">{p.nome}</td><td className="p-3">{p.especialidade}</td>
+                                <td className="p-3"><button onClick={() => handleDelete(p.id)} className="text-red-500 hover:text-red-700"><Trash2 size={18}/></button></td></tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );
@@ -222,33 +272,61 @@ const ViewProfessores = ({ professores, setProfessores, notify }) => {
 
 const ViewCursos = ({ cursos, setCursos, notify }) => {
     const [form, setForm] = useState({ nome: '', cargaHoraria: '', valor: '', prereqId: '', status: 'Ativo' });
-    const handleSubmit = (e) => {
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        setCursos([...cursos, { id: Date.now(), ...form }]);
-        notify("Curso cadastrado com sucesso!", "success");
-        setForm({ nome: '', cargaHoraria: '', valor: '', prereqId: '', status: 'Ativo' });
+        setIsLoading(true);
+        try {
+            const dataToSave = { ...form, valor: parseFloat(form.valor) };
+            const docRef = await addDoc(collection(db, "cursos"), dataToSave);
+            setCursos([...cursos, { id: docRef.id, ...dataToSave }]);
+            notify("Curso cadastrado com sucesso!", "success");
+            setForm({ nome: '', cargaHoraria: '', valor: '', prereqId: '', status: 'Ativo' });
+        } catch (error) {
+            console.error("Erro ao adicionar curso: ", error);
+            notify("Erro ao cadastrar curso.", "error");
+        }
+        setIsLoading(false);
     };
+
+    const handleDelete = async (id) => {
+        try {
+            await deleteDoc(doc(db, "cursos", id));
+            setCursos(cursos.filter(c => c.id !== id));
+            notify("Curso removido com sucesso!", "success");
+        } catch (error) {
+            console.error("Erro ao remover curso: ", error);
+            notify("Erro ao remover curso.", "error");
+        }
+    };
+
     return (
         <div className="animate-in fade-in flex flex-col lg:flex-row gap-6">
             <div className="flex-1 bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-fit">
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Book className="text-green-600" size={20}/> Cadastrar Curso</h3>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <input type="text" placeholder="Nome" className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg" value={form.nome} onChange={e=>setForm({...form, nome: e.target.value})} required/>
-                    <input type="number" placeholder="Valor R$" className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg" value={form.valor} onChange={e=>setForm({...form, valor: e.target.value})} required/>
-                    <button type="submit" className="w-full bg-green-600 text-white p-2.5 rounded-lg font-medium hover:bg-green-700">Salvar Curso</button>
+                    <input type="text" placeholder="Nome do Curso" className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg" value={form.nome} onChange={e=>setForm({...form, nome: e.target.value})} required/>
+                    <input type="number" placeholder="Valor R$" step="0.01" className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg" value={form.valor} onChange={e=>setForm({...form, valor: e.target.value})} required/>
+                    <button type="submit" disabled={isLoading} className="w-full bg-green-600 text-white p-2.5 rounded-lg font-medium hover:bg-green-700 disabled:opacity-50">
+                        {isLoading ? 'Salvando...' : 'Salvar Curso'}
+                    </button>
                 </form>
             </div>
-            <div className="flex-[2] bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <div className="flex-[2] bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <h3 className="text-lg font-bold mb-4">Cursos</h3>
-                <table className="w-full text-left border-collapse">
-                    <thead><tr className="bg-gray-50"><th className="p-3">Nome</th><th className="p-3">Valor</th><th className="p-3">Ações</th></tr></thead>
-                    <tbody>
-                        {cursos.map(c => (
-                            <tr key={c.id} className="border-b border-gray-50"><td className="p-3">{c.nome}</td><td className="p-3">R$ {parseFloat(c.valor).toFixed(2)}</td>
-                            <td className="p-3"><button onClick={() => setCursos(cursos.filter(x => x.id !== c.id))} className="text-red-500"><Trash2 size={16}/></button></td></tr>
-                        ))}
-                    </tbody>
-                </table>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse min-w-[500px]">
+                        <thead><tr className="bg-gray-50"><th className="p-3">Nome</th><th className="p-3">Valor</th><th className="p-3">Ações</th></tr></thead>
+                        <tbody>
+                            {cursos.length === 0 && <tr><td colSpan="3" className="p-4 text-center text-gray-500">Nenhum curso cadastrado.</td></tr>}
+                            {cursos.map(c => (
+                                <tr key={c.id} className="border-b border-gray-50"><td className="p-3">{c.nome}</td><td className="p-3">R$ {parseFloat(c.valor || 0).toFixed(2)}</td>
+                                <td className="p-3"><button onClick={() => handleDelete(c.id)} className="text-red-500 hover:text-red-700"><Trash2 size={18}/></button></td></tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );
@@ -256,17 +334,44 @@ const ViewCursos = ({ cursos, setCursos, notify }) => {
 
 const ViewTurmas = ({ turmas, setTurmas, cursos, professores, professorCursos, notify }) => {
     const [form, setForm] = useState({ cursoId: '', professorId: '', horario: '', dataInicio: '', dataFim: '', capacidade: '' });
+    const [isLoading, setIsLoading] = useState(false);
     
-    // Filter professors based on the selected course
-    const availableProfessors = professores.filter(p => 
-        professorCursos.some(pc => pc.professorId === p.id && pc.cursoId === Number(form.cursoId))
-    );
+    // In a real complete schema, we'd only show professors that have 'professorCursos' mapped.
+    // To avoid blocking UI if you haven't mapped them yet, we will fallback to all active professors if mapping is empty.
+    const availableProfessors = professorCursos.length > 0 
+        ? professores.filter(p => professorCursos.some(pc => pc.professorId === p.id && pc.cursoId === form.cursoId))
+        : professores;
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        setTurmas([...turmas, { id: Date.now(), ...form, cursoId: Number(form.cursoId), professorId: Number(form.professorId), capacidade: Number(form.capacidade) }]);
-        notify("Turma criada com sucesso!", "success");
-        setForm({ cursoId: '', professorId: '', horario: '', dataInicio: '', dataFim: '', capacidade: '' });
+        setIsLoading(true);
+        try {
+            const dataToSave = { 
+                ...form, 
+                cursoId: form.cursoId, 
+                professorId: form.professorId, 
+                capacidade: Number(form.capacidade) 
+            };
+            const docRef = await addDoc(collection(db, "turmas"), dataToSave);
+            setTurmas([...turmas, { id: docRef.id, ...dataToSave }]);
+            notify("Turma criada com sucesso!", "success");
+            setForm({ cursoId: '', professorId: '', horario: '', dataInicio: '', dataFim: '', capacidade: '' });
+        } catch (error) {
+            console.error("Erro ao adicionar turma: ", error);
+            notify("Erro ao criar turma.", "error");
+        }
+        setIsLoading(false);
+    };
+
+    const handleDelete = async (id) => {
+        try {
+            await deleteDoc(doc(db, "turmas", id));
+            setTurmas(turmas.filter(t => t.id !== id));
+            notify("Turma removida com sucesso!", "success");
+        } catch (error) {
+            console.error("Erro ao remover turma: ", error);
+            notify("Erro ao remover turma.", "error");
+        }
     };
 
     return (
@@ -279,7 +384,7 @@ const ViewTurmas = ({ turmas, setTurmas, cursos, professores, professorCursos, n
                         {cursos.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                     </select>
                     <select className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg" value={form.professorId} onChange={e=>setForm({...form, professorId: e.target.value})} required disabled={!form.cursoId}>
-                        <option value="">Selecione o Professor Habilitado...</option>
+                        <option value="">Selecione o Professor...</option>
                         {availableProfessors.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
                     </select>
                     <input type="text" placeholder="Horário (ex: Seg/Qua 19h)" className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg" value={form.horario} onChange={e=>setForm({...form, horario: e.target.value})} required/>
@@ -288,7 +393,9 @@ const ViewTurmas = ({ turmas, setTurmas, cursos, professores, professorCursos, n
                         <input type="date" className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg" value={form.dataFim} onChange={e=>setForm({...form, dataFim: e.target.value})} required title="Data Fim"/>
                     </div>
                     <input type="number" placeholder="Capacidade (Vagas)" className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg" value={form.capacidade} onChange={e=>setForm({...form, capacidade: e.target.value})} required/>
-                    <button type="submit" className="w-full bg-orange-600 text-white p-2.5 rounded-lg font-medium hover:bg-orange-700">Abrir Turma</button>
+                    <button type="submit" disabled={isLoading} className="w-full bg-orange-600 text-white p-2.5 rounded-lg font-medium hover:bg-orange-700 disabled:opacity-50">
+                        {isLoading ? 'Salvando...' : 'Abrir Turma'}
+                    </button>
                 </form>
             </div>
             <div className="flex-[2] bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -297,16 +404,17 @@ const ViewTurmas = ({ turmas, setTurmas, cursos, professores, professorCursos, n
                     <table className="w-full text-left border-collapse min-w-[600px]">
                         <thead><tr className="bg-gray-50"><th className="p-3">Curso</th><th className="p-3">Professor</th><th className="p-3">Horário</th><th className="p-3">Vagas</th><th className="p-3">Ações</th></tr></thead>
                         <tbody>
+                            {turmas.length === 0 && <tr><td colSpan="5" className="p-4 text-center text-gray-500">Nenhuma turma cadastrada.</td></tr>}
                             {turmas.map(t => {
                                 const curso = cursos.find(c => c.id === t.cursoId);
                                 const prof = professores.find(p => p.id === t.professorId);
                                 return (
                                     <tr key={t.id} className="border-b border-gray-50">
-                                        <td className="p-3 font-medium">{curso?.nome}</td>
-                                        <td className="p-3 text-gray-600">{prof?.nome}</td>
+                                        <td className="p-3 font-medium">{curso?.nome || 'Desconhecido'}</td>
+                                        <td className="p-3 text-gray-600">{prof?.nome || 'Desconhecido'}</td>
                                         <td className="p-3 text-sm">{t.horario}</td>
                                         <td className="p-3">{t.capacidade}</td>
-                                        <td className="p-3"><button onClick={() => setTurmas(turmas.filter(x => x.id !== t.id))} className="text-red-500"><Trash2 size={16}/></button></td>
+                                        <td className="p-3"><button onClick={() => handleDelete(t.id)} className="text-red-500 hover:text-red-700"><Trash2 size={18}/></button></td>
                                     </tr>
                                 );
                             })}
@@ -320,21 +428,46 @@ const ViewTurmas = ({ turmas, setTurmas, cursos, professores, professorCursos, n
 
 const ViewMatriculas = ({ matriculas, setMatriculas, alunos, turmas, cursos, notify }) => {
     const [form, setForm] = useState({ alunoId: '', turmaId: '' });
+    const [isLoading, setIsLoading] = useState(false);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        const turmaId = Number(form.turmaId);
-        const ocupadas = matriculas.filter(m => m.turmaId === turmaId).length;
-        const turma = turmas.find(t => t.id === turmaId);
         
-        if (ocupadas >= turma?.capacidade) {
+        const ocupadas = matriculas.filter(m => m.turmaId === form.turmaId).length;
+        const turma = turmas.find(t => t.id === form.turmaId);
+        
+        if (turma && ocupadas >= turma.capacidade) {
             notify("Turma sem vagas disponíveis!", "error");
             return;
         }
 
-        setMatriculas([...matriculas, { id: Date.now(), ...form, alunoId: Number(form.alunoId), turmaId, data: new Date().toISOString().split('T')[0], status: 'Ativa' }]);
-        notify("Matrícula efetuada com sucesso!", "success");
-        setForm({ alunoId: '', turmaId: '' });
+        setIsLoading(true);
+        try {
+            const dataToSave = { 
+                ...form, 
+                data: new Date().toISOString().split('T')[0], 
+                status: 'Ativa' 
+            };
+            const docRef = await addDoc(collection(db, "matriculas"), dataToSave);
+            setMatriculas([...matriculas, { id: docRef.id, ...dataToSave }]);
+            notify("Matrícula efetuada com sucesso!", "success");
+            setForm({ alunoId: '', turmaId: '' });
+        } catch (error) {
+            console.error("Erro ao adicionar matrícula: ", error);
+            notify("Erro ao realizar matrícula.", "error");
+        }
+        setIsLoading(false);
+    };
+
+    const handleDelete = async (id) => {
+        try {
+            await deleteDoc(doc(db, "matriculas", id));
+            setMatriculas(matriculas.filter(m => m.id !== id));
+            notify("Matrícula cancelada/removida com sucesso!", "success");
+        } catch (error) {
+            console.error("Erro ao remover matrícula: ", error);
+            notify("Erro ao remover matrícula.", "error");
+        }
     };
 
     return (
@@ -353,7 +486,9 @@ const ViewMatriculas = ({ matriculas, setMatriculas, alunos, turmas, cursos, not
                             return <option key={t.id} value={t.id}>{c?.nome} - {t.horario}</option>
                         })}
                     </select>
-                    <button type="submit" className="w-full bg-emerald-600 text-white p-2.5 rounded-lg font-medium hover:bg-emerald-700">Matricular Aluno</button>
+                    <button type="submit" disabled={isLoading} className="w-full bg-emerald-600 text-white p-2.5 rounded-lg font-medium hover:bg-emerald-700 disabled:opacity-50">
+                        {isLoading ? 'Matriculando...' : 'Matricular Aluno'}
+                    </button>
                 </form>
             </div>
             <div className="flex-[2] bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -362,16 +497,17 @@ const ViewMatriculas = ({ matriculas, setMatriculas, alunos, turmas, cursos, not
                     <table className="w-full text-left border-collapse min-w-[500px]">
                         <thead><tr className="bg-gray-50"><th className="p-3">Aluno</th><th className="p-3">Turma / Curso</th><th className="p-3">Data</th><th className="p-3">Ações</th></tr></thead>
                         <tbody>
+                            {matriculas.length === 0 && <tr><td colSpan="4" className="p-4 text-center text-gray-500">Nenhuma matrícula registrada.</td></tr>}
                             {matriculas.map(m => {
                                 const aluno = alunos.find(a => a.id === m.alunoId);
                                 const turma = turmas.find(t => t.id === m.turmaId);
                                 const curso = cursos.find(c => c.id === turma?.cursoId);
                                 return (
                                     <tr key={m.id} className="border-b border-gray-50">
-                                        <td className="p-3 font-medium">{aluno?.nome}</td>
-                                        <td className="p-3 text-sm">{curso?.nome} ({turma?.horario})</td>
-                                        <td className="p-3 text-sm text-gray-500">{new Date(m.data).toLocaleDateString('pt-BR')}</td>
-                                        <td className="p-3"><button onClick={() => setMatriculas(matriculas.filter(x => x.id !== m.id))} className="text-red-500"><Trash2 size={16}/></button></td>
+                                        <td className="p-3 font-medium">{aluno?.nome || 'Desconhecido'}</td>
+                                        <td className="p-3 text-sm">{curso?.nome || 'Desconhecido'} ({turma?.horario || '-'})</td>
+                                        <td className="p-3 text-sm text-gray-500">{m.data ? new Date(m.data).toLocaleDateString('pt-BR') : '-'}</td>
+                                        <td className="p-3"><button onClick={() => handleDelete(m.id)} className="text-red-500 hover:text-red-700"><Trash2 size={18}/></button></td>
                                     </tr>
                                 );
                             })}
@@ -384,26 +520,80 @@ const ViewMatriculas = ({ matriculas, setMatriculas, alunos, turmas, cursos, not
 };
 
 const App = () => {
-    const [isLoading, setIsLoading] = useState(true);
+    // Minigame & Data fetching states
+    const [isAppVisible, setIsAppVisible] = useState(false);
+    const [isDataReady, setIsDataReady] = useState(false);
+    
+    // UI Navigation state
     const [activeTab, setActiveTab] = useState('dashboard');
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    
-    const [alunos, setAlunos] = useState(initialAlunos);
-    const [professores, setProfessores] = useState(initialProfessores);
-    const [cursos, setCursos] = useState(initialCursos);
-    const [professorCursos, setProfessorCursos] = useState(initialProfessorCursos);
-    const [turmas, setTurmas] = useState(initialTurmas);
-    const [matriculas, setMatriculas] = useState(initialMatriculas);
-    const [pagamentos, setPagamentos] = useState(initialPagamentos);
-
     const [notification, setNotification] = useState({ message: '', type: '' });
     
+    // Firebase Data States
+    const [alunos, setAlunos] = useState([]);
+    const [professores, setProfessores] = useState([]);
+    const [cursos, setCursos] = useState([]);
+    const [professorCursos, setProfessorCursos] = useState([]);
+    const [turmas, setTurmas] = useState([]);
+    const [matriculas, setMatriculas] = useState([]);
+    const [pagamentos, setPagamentos] = useState([]);
+
     const showNotification = (message, type = 'success') => {
         setNotification({ message, type });
         setTimeout(() => setNotification({ message: '', type: '' }), 4000);
     };
 
-    if (isLoading) return <MarioLoading onComplete={() => setIsLoading(false)} />;
+    // Fetch all collections from Firebase on component mount
+    useEffect(() => {
+        const fetchAllData = async () => {
+            try {
+                // Fetchers function
+                const getCollectionData = async (colName) => {
+                    const snap = await getDocs(collection(db, colName));
+                    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                };
+
+                // Fetch everything concurrently to save time
+                const [
+                    fetchedAlunos,
+                    fetchedProfessores,
+                    fetchedCursos,
+                    fetchedProfCursos,
+                    fetchedTurmas,
+                    fetchedMatriculas,
+                    fetchedPagamentos
+                ] = await Promise.all([
+                    getCollectionData("alunos"),
+                    getCollectionData("professores"),
+                    getCollectionData("cursos"),
+                    getCollectionData("professorCursos"),
+                    getCollectionData("turmas"),
+                    getCollectionData("matriculas"),
+                    getCollectionData("pagamentos")
+                ]);
+
+                setAlunos(fetchedAlunos);
+                setProfessores(fetchedProfessores);
+                setCursos(fetchedCursos);
+                setProfessorCursos(fetchedProfCursos);
+                setTurmas(fetchedTurmas);
+                setMatriculas(fetchedMatriculas);
+                setPagamentos(fetchedPagamentos);
+            } catch (error) {
+                console.error("Erro ao buscar dados do Firebase: ", error);
+                showNotification("Erro de conexão com o banco de dados.", "error");
+            } finally {
+                setIsDataReady(true);
+            }
+        };
+
+        fetchAllData();
+    }, []);
+
+    // Render loading screen if app shouldn't be visible yet
+    if (!isAppVisible) {
+        return <MarioLoading onComplete={() => setIsAppVisible(true)} isDataReady={isDataReady} />;
+    }
 
     const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
